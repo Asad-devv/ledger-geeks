@@ -16,8 +16,7 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
   const canvas = document.getElementById('bgFlowCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  let w, h, dpr, nodes = [], edges = [], pulses = [];
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let w, h, dpr, nodes = [], edges = [];
 
   function mulberry32(seed) {
     return function () {
@@ -28,11 +27,6 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
     };
   }
   const rand = mulberry32(303);
-
-  function spawnPulse() {
-    const edge = edges[Math.floor(rand() * edges.length)];
-    return { edge, t: rand(), speed: 0.0018 + rand() * 0.0022, seed: rand() * 100 };
-  }
 
   function build() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -53,40 +47,20 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
         if (!edges.find(e => e.key === key)) edges.push({ key, a: n, b: nodes[t.j] });
       });
     });
-    pulses = Array.from({ length: Math.min(16, edges.length) }, spawnPulse);
   }
 
-  let running = !document.hidden;
-  function tick() {
-    if (!running) return;
+  // static — just a faint line lattice, no travelling dots
+  function draw() {
     ctx.clearRect(0, 0, w, h);
     ctx.lineWidth = 1;
     edges.forEach(e => {
       ctx.strokeStyle = 'rgba(140,220,195,0.06)';
       ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
     });
-    pulses.forEach((p, i) => {
-      if (!reduced) p.t += p.speed;
-      if (p.t > 1) { pulses[i] = spawnPulse(); return; }
-      const x = p.edge.a.x + (p.edge.b.x - p.edge.a.x) * p.t;
-      const y = p.edge.a.y + (p.edge.b.y - p.edge.a.y) * p.t;
-      const hue = 158 + Math.sin(p.seed) * 25;
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, 10);
-      grad.addColorStop(0, `hsla(${hue},85%,62%,0.9)`);
-      grad.addColorStop(1, `hsla(${hue},85%,55%,0)`);
-      ctx.fillStyle = grad;
-      ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2); ctx.fill();
-    });
-    if (!reduced) requestAnimationFrame(tick);
   }
-
-  document.addEventListener('visibilitychange', () => {
-    running = !document.hidden;
-    if (running) requestAnimationFrame(tick);
-  });
-  window.addEventListener('resize', build, { passive: true });
+  window.addEventListener('resize', () => { build(); draw(); }, { passive: true });
   build();
-  tick();
+  draw();
 })();
 
 /* ---------- custom cursor ---------- */
@@ -234,38 +208,7 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
     p.z += (rand() - 0.5) * 1.4;
   });
 
-  function discTexture() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 64;
-    const ctx = c.getContext('2d');
-    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.35, 'rgba(255,255,255,0.85)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 64, 64);
-    return new THREE.CanvasTexture(c);
-  }
-
-  const posArr = new Float32Array(N * 3);
-  const colArr = new Float32Array(N * 3);
-  const cA = new THREE.Color(0x17c98a);
-  const cB = new THREE.Color(0x0bdfc4);
-  pts.forEach((p, i) => {
-    posArr[i * 3] = p.x; posArr[i * 3 + 1] = p.y; posArr[i * 3 + 2] = p.z;
-    const c = i % 3 === 0 ? cB : cA;
-    colArr[i * 3] = c.r; colArr[i * 3 + 1] = c.g; colArr[i * 3 + 2] = c.b;
-  });
-  const pointsGeo = new THREE.BufferGeometry();
-  pointsGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
-  pointsGeo.setAttribute('color', new THREE.BufferAttribute(colArr, 3));
-  const pointsMat = new THREE.PointsMaterial({
-    size: 1.7, map: discTexture(), vertexColors: true, transparent: true,
-    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
-  });
-  group.add(new THREE.Points(pointsGeo, pointsMat));
-
-  // edges: connect each node to its 2 nearest neighbors
+  // edges only — connect each node to its 2 nearest neighbors, no node dots
   const edgePositions = [];
   pts.forEach((p, i) => {
     const targets = pts
@@ -283,18 +226,25 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
   });
   group.add(new THREE.LineSegments(lineGeo, lineMat));
 
-  // a sparse outer halo for depth
+  // a sparse outer wireframe halo for depth (also lines only)
   const HALO_N = 40;
   const haloPts = fibonacciSphere(HALO_N, 24);
-  const haloArr = new Float32Array(HALO_N * 3);
-  haloPts.forEach((p, i) => { haloArr[i * 3] = p.x; haloArr[i * 3 + 1] = p.y; haloArr[i * 3 + 2] = p.z; });
-  const haloGeo = new THREE.BufferGeometry();
-  haloGeo.setAttribute('position', new THREE.BufferAttribute(haloArr, 3));
-  const haloMat = new THREE.PointsMaterial({
-    size: 1, map: discTexture(), color: 0x0bdfc4, transparent: true, opacity: 0.5,
-    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  const haloEdgePositions = [];
+  haloPts.forEach((p, i) => {
+    const targets = haloPts
+      .map((q, j) => ({ j, d: p.distanceTo(q) }))
+      .filter(t => t.j !== i).sort((a, b) => a.d - b.d).slice(0, 2);
+    targets.forEach(t => {
+      haloEdgePositions.push(p.x, p.y, p.z, haloPts[t.j].x, haloPts[t.j].y, haloPts[t.j].z);
+    });
   });
-  const halo = new THREE.Points(haloGeo, haloMat);
+  const haloGeo = new THREE.BufferGeometry();
+  haloGeo.setAttribute('position', new THREE.Float32BufferAttribute(haloEdgePositions, 3));
+  const haloMat = new THREE.LineBasicMaterial({
+    color: 0x0bdfc4, transparent: true, opacity: 0.25,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const halo = new THREE.LineSegments(haloGeo, haloMat);
   group.add(halo);
 
   function resize() {
@@ -379,16 +329,6 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
   const pts = fibonacciSphere(N, 13);
   const rand = mulberry32(19);
   pts.forEach(p => { p.x += (rand() - 0.5) * 1.2; p.y += (rand() - 0.5) * 1.2; p.z += (rand() - 0.5) * 1.2; });
-
-  const posArr = new Float32Array(N * 3);
-  pts.forEach((p, i) => { posArr[i * 3] = p.x; posArr[i * 3 + 1] = p.y; posArr[i * 3 + 2] = p.z; });
-  const pointsGeo = new THREE.BufferGeometry();
-  pointsGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
-  const pointsMat = new THREE.PointsMaterial({
-    size: 1.4, color: 0x17c98a, transparent: true, opacity: 0.85,
-    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
-  });
-  group.add(new THREE.Points(pointsGeo, pointsMat));
 
   const edgePositions = [];
   pts.forEach((p, i) => {
