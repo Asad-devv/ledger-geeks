@@ -208,7 +208,20 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
     p.z += (rand() - 0.5) * 1.4;
   });
 
-  // edges only — connect each node to its 2 nearest neighbors, no node dots
+  function glowTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.4, 'rgba(255,255,255,0.6)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(c);
+  }
+
+  // edges — connect each node to its 2 nearest neighbors
   const edgePositions = [];
   pts.forEach((p, i) => {
     const targets = pts
@@ -221,10 +234,21 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(edgePositions, 3));
   const lineMat = new THREE.LineBasicMaterial({
-    color: 0x4dffc4, transparent: true, opacity: 0.55,
+    color: 0x8ff7dc, transparent: true, opacity: 0.55,
     blending: THREE.AdditiveBlending, depthWrite: false,
   });
   group.add(new THREE.LineSegments(lineGeo, lineMat));
+
+  // a soft glow marking each vertex — small, only where lines actually meet
+  const vertexArr = new Float32Array(N * 3);
+  pts.forEach((p, i) => { vertexArr[i * 3] = p.x; vertexArr[i * 3 + 1] = p.y; vertexArr[i * 3 + 2] = p.z; });
+  const vertexGeo = new THREE.BufferGeometry();
+  vertexGeo.setAttribute('position', new THREE.BufferAttribute(vertexArr, 3));
+  const vertexMat = new THREE.PointsMaterial({
+    size: 0.85, map: glowTexture(), color: 0x4eeab3, transparent: true, opacity: 0.9,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  });
+  group.add(new THREE.Points(vertexGeo, vertexMat));
 
   // a sparse outer wireframe halo for depth (also lines only)
   const HALO_N = 40;
@@ -241,11 +265,21 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
   const haloGeo = new THREE.BufferGeometry();
   haloGeo.setAttribute('position', new THREE.Float32BufferAttribute(haloEdgePositions, 3));
   const haloMat = new THREE.LineBasicMaterial({
-    color: 0x0bdfc4, transparent: true, opacity: 0.25,
+    color: 0x5ff3e6, transparent: true, opacity: 0.25,
     blending: THREE.AdditiveBlending, depthWrite: false,
   });
   const halo = new THREE.LineSegments(haloGeo, haloMat);
   group.add(halo);
+
+  const haloVertexArr = new Float32Array(HALO_N * 3);
+  haloPts.forEach((p, i) => { haloVertexArr[i * 3] = p.x; haloVertexArr[i * 3 + 1] = p.y; haloVertexArr[i * 3 + 2] = p.z; });
+  const haloVertexGeo = new THREE.BufferGeometry();
+  haloVertexGeo.setAttribute('position', new THREE.BufferAttribute(haloVertexArr, 3));
+  const haloVertexMat = new THREE.PointsMaterial({
+    size: 0.6, map: glowTexture(), color: 0x5ff3e6, transparent: true, opacity: 0.5,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  });
+  group.add(new THREE.Points(haloVertexGeo, haloVertexMat));
 
   function resize() {
     const w = heroSection.clientWidth, h = heroSection.clientHeight;
@@ -338,8 +372,30 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
   });
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(edgePositions, 3));
-  const lineMat = new THREE.LineBasicMaterial({ color: 0x0bdfc4, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x5ff3e6, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
   group.add(new THREE.LineSegments(lineGeo, lineMat));
+
+  function glowTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.4, 'rgba(255,255,255,0.6)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(c);
+  }
+  const vertexArr = new Float32Array(N * 3);
+  pts.forEach((p, i) => { vertexArr[i * 3] = p.x; vertexArr[i * 3 + 1] = p.y; vertexArr[i * 3 + 2] = p.z; });
+  const vertexGeo = new THREE.BufferGeometry();
+  vertexGeo.setAttribute('position', new THREE.BufferAttribute(vertexArr, 3));
+  const vertexMat = new THREE.PointsMaterial({
+    size: 0.8, map: glowTexture(), color: 0x4eeab3, transparent: true, opacity: 0.85,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  });
+  group.add(new THREE.Points(vertexGeo, vertexMat));
 
   function resize() {
     const w = section.clientWidth, h = section.clientHeight;
@@ -381,14 +437,35 @@ mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => 
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
   camera.position.set(0, 0, 7.5);
 
+  function glowTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.4, 'rgba(255,255,255,0.6)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(c);
+  }
+
   const outer = new THREE.Group();
-  const outerGeo = new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(2.7, 1));
-  outer.add(new THREE.LineSegments(outerGeo, new THREE.LineBasicMaterial({ color: 0x17c98a, transparent: true, opacity: 0.45 })));
+  const outerBase = new THREE.IcosahedronGeometry(2.7, 1);
+  outer.add(new THREE.LineSegments(new THREE.WireframeGeometry(outerBase), new THREE.LineBasicMaterial({ color: 0x4eeab3, transparent: true, opacity: 0.45 })));
+  outer.add(new THREE.Points(outerBase, new THREE.PointsMaterial({
+    size: 0.22, map: glowTexture(), color: 0x4eeab3, transparent: true, opacity: 0.9,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  })));
   scene.add(outer);
 
   const inner = new THREE.Group();
-  const innerGeo = new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(1.55, 0));
-  inner.add(new THREE.LineSegments(innerGeo, new THREE.LineBasicMaterial({ color: 0x0bdfc4, transparent: true, opacity: 0.65 })));
+  const innerBase = new THREE.IcosahedronGeometry(1.55, 0);
+  inner.add(new THREE.LineSegments(new THREE.WireframeGeometry(innerBase), new THREE.LineBasicMaterial({ color: 0x5ff3e6, transparent: true, opacity: 0.65 })));
+  inner.add(new THREE.Points(innerBase, new THREE.PointsMaterial({
+    size: 0.28, map: glowTexture(), color: 0x5ff3e6, transparent: true, opacity: 1,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  })));
   scene.add(inner);
 
   function resize() {
