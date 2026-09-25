@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "ledger-geeks",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "4200", "-d", "."],
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
       "port": 4200
     }
   ]
